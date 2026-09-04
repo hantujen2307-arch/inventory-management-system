@@ -28,7 +28,7 @@ class StateStore {
     };
 
     // Registered user credentials for security
-    this.storageKeyAccounts = 'stockflow_accounts_v2';
+    this.storageKeyAccounts = 'stockflow_accounts_v3';
     const savedAccounts = localStorage.getItem(this.storageKeyAccounts);
     this.accounts = savedAccounts ? JSON.parse(savedAccounts) : [
       {
@@ -41,6 +41,25 @@ class StateStore {
         node: "WMS Node 004 - Jakarta Sentral"
       }
     ];
+
+    // Verify current user validity on startup
+    if (this.currentUser && this.currentUser.isLoggedIn) {
+      const isValid = this.accounts.some(acc => 
+        acc.email.toLowerCase() === (this.currentUser.email || '').toLowerCase() ||
+        (acc.alternateEmail && acc.alternateEmail.toLowerCase() === (this.currentUser.email || '').toLowerCase())
+      );
+      if (!isValid) {
+        this.currentUser = {
+          isLoggedIn: false,
+          name: "",
+          role: "",
+          email: "",
+          avatar: "",
+          node: ""
+        };
+        localStorage.removeItem(this.storageKeyUser);
+      }
+    }
 
     this.suppliers = [...initialSuppliers];
     this.categories = [...initialCategories];
@@ -67,7 +86,7 @@ class StateStore {
     this.notify();
   }
 
-  // Auth methods with strict password verification
+  // Auth methods with strict email & password verification
   login(email, password, role = "Admin Logistik") {
     if (!email || !email.trim()) {
       throw new Error("Silakan masukkan email perusahaan Anda.");
@@ -79,53 +98,28 @@ class StateStore {
     const trimmedEmail = email.toLowerCase().trim();
     const matched = this.accounts.find(acc => 
       acc.email.toLowerCase() === trimmedEmail || 
-      acc.alternateEmail.toLowerCase() === trimmedEmail
+      (acc.alternateEmail && acc.alternateEmail.toLowerCase() === trimmedEmail)
     );
 
-    if (matched) {
-      if (matched.password !== password) {
-        throw new Error("Kata sandi salah! Silakan periksa kembali kata sandi Anda.");
-      }
-      this.currentUser = {
-        isLoggedIn: true,
-        name: matched.name,
-        role: matched.role,
-        email: matched.email,
-        avatar: matched.avatar,
-        node: matched.node
-      };
-      this.addActivity(`${matched.name} (${matched.role}) berhasil masuk ke sistem`);
-      this.persist();
-      return this.currentUser;
+    // Strict validation: Reject if email is not registered
+    if (!matched) {
+      throw new Error("Email tidak terdaftar dalam sistem! Akses ditolak.");
     }
 
-    // Dynamic user registration if email not in default list
-    if (password.length < 6) {
-      throw new Error("Kata sandi minimal 6 karakter.");
+    // Strict validation: Reject if password does not match
+    if (matched.password !== password) {
+      throw new Error("Kata sandi salah! Silakan periksa kembali kata sandi Anda.");
     }
 
-    const isStaff = role.toLowerCase().includes("staff");
-    const newName = email.split('@')[0].replace(/[._]/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-    const newAccount = {
-      email: trimmedEmail,
-      alternateEmail: trimmedEmail,
-      password: password,
-      role: isStaff ? "Staff Gudang" : "Admin Logistik",
-      name: newName || "Pengguna Gudang",
-      avatar: (newName ? newName.slice(0, 2) : "PG").toUpperCase(),
-      node: "WMS Node 004 - Jakarta"
-    };
-
-    this.accounts.push(newAccount);
     this.currentUser = {
       isLoggedIn: true,
-      name: newAccount.name,
-      role: newAccount.role,
-      email: newAccount.email,
-      avatar: newAccount.avatar,
-      node: newAccount.node
+      name: matched.name,
+      role: role || matched.role,
+      email: matched.email,
+      avatar: matched.avatar,
+      node: matched.node
     };
-    this.addActivity(`${newAccount.name} mendaftar dan masuk ke sistem`);
+    this.addActivity(`${matched.name} (${this.currentUser.role}) berhasil masuk ke sistem`);
     this.persist();
     return this.currentUser;
   }

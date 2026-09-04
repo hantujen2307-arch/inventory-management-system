@@ -211,12 +211,26 @@ export function attachLoginEvents() {
     });
   }
 
+  if (loginEmail) {
+    loginEmail.addEventListener('input', () => {
+      if (errorAlert) errorAlert.style.display = 'none';
+      loginEmail.classList.remove('input-error');
+    });
+  }
+
+  if (passInput) {
+    passInput.addEventListener('input', () => {
+      if (errorAlert) errorAlert.style.display = 'none';
+      passInput.classList.remove('input-error');
+    });
+  }
+
   if (loginForm) {
     loginForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const email = loginEmail.value.trim();
-      const password = passInput.value;
-      const role = loginRole.value;
+      const email = loginEmail ? loginEmail.value.trim() : '';
+      const password = passInput ? passInput.value : '';
+      const role = loginRole ? loginRole.value : 'Admin Logistik';
 
       try {
         store.login(email, password, role);
@@ -229,6 +243,23 @@ export function attachLoginEvents() {
           errorAlert.style.display = 'flex';
         }
         showToast(err.message, 'error');
+
+        // Trigger shake animation for clear feedback
+        loginForm.classList.add('shake-anim');
+        setTimeout(() => loginForm.classList.remove('shake-anim'), 450);
+
+        // Highlight relevant input
+        if (err.message.toLowerCase().includes('email')) {
+          if (loginEmail) {
+            loginEmail.classList.add('input-error');
+            loginEmail.focus();
+          }
+        } else if (err.message.toLowerCase().includes('sandi') || err.message.toLowerCase().includes('password')) {
+          if (passInput) {
+            passInput.classList.add('input-error');
+            passInput.focus();
+          }
+        }
       }
     });
   }
